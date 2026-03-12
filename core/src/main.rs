@@ -9,6 +9,7 @@ use std::{
 use anyhow::{Context, Result};
 use serde::Deserialize;
 
+#[derive(Clone)]
 enum Node {
     /// ルートノード（ドキュメント全体）
     Root(Vec<Node>),
@@ -87,21 +88,26 @@ frac
     ";
 
     // TODO: 保存先をOS依存なしに
-    let config = load_command_config(&PathBuf::from("./commands.toml"))?;
-    let known_commands = config.keys().collect::<Vec<_>>();
+    let configs = load_command_config(&PathBuf::from("./commands.toml"))?;
 
-    let mut stack: Vec<(Node, i32)> = vec![(Node::Root(Vec::new()), -1)];
+    let tree = parse_to_tree(sample, &configs)?;
+    println!("{}", get_latex(&tree, &configs)?);
+    Ok(())
+}
+
+fn parse_to_tree(sample: &str, configs: &HashMap<String, CommandConfig>) -> Result<Node> {
+    let mut stack: Vec<(Node, usize)> = vec![(Node::Root(Vec::new()), 0)];
     for line in sample.lines() {
         if is_empty_line(line) {
             continue;
         }
-        let last_indent: i32 = stack.last().unwrap().1;
+        let last_indent: usize = stack.last().unwrap().1;
         let current_indent = get_indent(line);
         let indent_comparison = current_indent.cmp(&last_indent);
         match indent_comparison {
             Ordering::Greater | Ordering::Equal => {
                 let trimed = line.trim().to_string();
-                if known_commands.contains(&&trimed.to_string()) {
+                if configs.contains_key(&trimed.to_string()) {
                     if indent_comparison == Ordering::Equal {
                         let (finished_node, _) = stack.pop().unwrap();
                         if let Some((Node::Root(children) | Node::Command { children, .. }, _)) =
@@ -144,12 +150,11 @@ frac
         }
     }
 
-    println!("{:?}", stack.first().unwrap().0);
-    println!("{}", get_latex(&stack.first().unwrap().0, &config)?);
-    Ok(())
+    let root = stack.first().unwrap();
+    Ok(root.clone().0)
 }
 
-fn get_indent(text: &str) -> i32 {
+fn get_indent(text: &str) -> usize {
     let mut i = 0;
     for c in text.chars() {
         if !c.is_ascii_whitespace() {
@@ -214,7 +219,7 @@ fn format_template(
     children: &[Node],
     configs: &HashMap<String, CommandConfig>,
 ) -> Result<String> {
-    let config = configs.get(name).unwrap(); // get_latexで存在確認済み
+    let config = configs.get(name).expect("get_latexで存在確認済み");
     let mut template = config
         .template
         .as_ref() // これないと怒られる。よくわかってない
