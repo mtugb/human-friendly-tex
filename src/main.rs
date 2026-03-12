@@ -15,15 +15,15 @@ enum Node {
 
     /// 特定のコマンド（mat, sumなど）
     Command {
-        name: &'static str,
+        name: String,
         children: Vec<Node>, // 子要素もNodeなので再帰的
     },
 
     /// 最小単位（x + y など、これ以上分解しない文字列）
-    Leaf(&'static str),
+    Leaf(String),
 }
 impl Node {
-    fn command(name: &'static str) -> Node {
+    fn command(name: String) -> Node {
         Node::Command {
             name,
             children: Vec::new(),
@@ -88,7 +88,7 @@ frac
 
     // TODO: 保存先をOS依存なしに
     let config = load_command_config(&PathBuf::from("./commands.toml"))?;
-    let known_commands = config.iter().map(|(key, _)| key).collect::<Vec<_>>();
+    let known_commands = config.keys().collect::<Vec<_>>();
 
     let mut stack: Vec<(Node, i32)> = vec![(Node::Root(Vec::new()), -1)];
     for line in sample.lines() {
@@ -100,7 +100,7 @@ frac
         let indent_comparison = current_indent.cmp(&last_indent);
         match indent_comparison {
             Ordering::Greater | Ordering::Equal => {
-                let trimed = line.trim();
+                let trimed = line.trim().to_string();
                 if known_commands.contains(&&trimed.to_string()) {
                     if indent_comparison == Ordering::Equal {
                         let (finished_node, _) = stack.pop().unwrap();
@@ -145,7 +145,7 @@ frac
     }
 
     println!("{:?}", stack.first().unwrap().0);
-    println!("{}", get_latex(&stack.first().unwrap().0, &config));
+    println!("{}", get_latex(&stack.first().unwrap().0, &config)?);
     Ok(())
 }
 
@@ -164,13 +164,13 @@ fn is_empty_line(line: &str) -> bool {
     line.is_empty() || line.chars().filter(|c| !c.is_ascii_whitespace()).count() == 0
 }
 
-fn get_latex(node: &Node, configs: &HashMap<&str, CommandConfig>) -> Result<String> {
+fn get_latex(node: &Node, configs: &HashMap<String, CommandConfig>) -> Result<String> {
     match node {
-        Node::Root(children) => Ok(children
-            .iter()
-            .map(|c| get_latex(c, configs)?)
-            .collect::<Vec<_>>()
-            .join("")),
+        Node::Root(children) => {
+            let parts: Result<Vec<String>> =
+                children.iter().map(|c| get_latex(c, configs)).collect();
+            Ok(parts?.join(""))
+        }
         Node::Command { name, children } => match configs.get(name) {
             Some(config) => match config.render_type {
                 RenderType::Template => format_template(name, children, configs),
@@ -180,32 +180,16 @@ fn get_latex(node: &Node, configs: &HashMap<&str, CommandConfig>) -> Result<Stri
                     Ok(format_environment(env_name, children, configs)?)
                 }
             },
-            None => Err(anyhow!("no command found")),
+            None => Err(anyhow::anyhow!("no command found")),
         },
         Node::Leaf(text) => Ok(text.to_string()),
     }
 }
 
-// fn format_command_a(
-//     name: &str,
-//     children: &Vec<Node>,
-//     configs: &HashMap<&str, RenderType>,
-// ) -> String {
-//     let mut command = String::new();
-//     command.push('\\');
-//     command.push_str(name);
-//     for child in children {
-//         command.push('{');
-//         command.push_str(&get_latex(child, configs));
-//         command.push('}');
-//     }
-//     command
-// }
-
 fn format_environment(
     name: &str,
     children: &[Node],
-    configs: &HashMap<&str, CommandConfig>,
+    configs: &HashMap<String, CommandConfig>,
 ) -> Result<String> {
     let mut command = String::new();
     command.push_str("\\begin{");
@@ -214,8 +198,8 @@ fn format_environment(
     command.push('\n');
     let body = children
         .iter()
-        .map(|child| get_latex(child, configs)?)
-        .collect::<Vec<_>>()
+        .map(|child| get_latex(child, configs))
+        .collect::<Result<Vec<_>>>()?
         .join(" \\\\ \n");
     command.push_str(&body);
     command.push('\n');
@@ -228,7 +212,7 @@ fn format_environment(
 fn format_template(
     name: &str,
     children: &[Node],
-    configs: &HashMap<&str, CommandConfig>,
+    configs: &HashMap<String, CommandConfig>,
 ) -> Result<String> {
     let config = configs.get(name).unwrap(); // get_latexで存在確認済み
     let mut template = config
