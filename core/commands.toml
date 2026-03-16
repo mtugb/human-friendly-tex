@@ -1,20 +1,34 @@
+# Ensure not to use double quartation.
+# pattern requires escapement
 [frac]
-type = "Template"
+pattern = 'frac'
+type = 'Template'
 template = '\frac{$0}{$1}'
 args_count = 2
 alias = ["f"]
 
 # matrix
 [mat]
-type = "Environment"
-env_name = "bmatrix"
-alias = ["m"]
-[|mat|]
+pattern = 'mat'
+type = 'Environment'
+env_name = 'bmatrix'
+alias = ['m']
+[[mat.replacements]]
+from = ' '
+to = '&'
+[vmat]
+pattern = '\|mat\|'
 type = "Environment"
 env_name = "vmatrix"
-alias = ["|m|"]
+alias = ['\|m\|']
+[tmat]
+pattern = 'mat\^t'
+type = 'Environment'
+env_name = 'bmatrix'
+alias = ['m\^t']
 
 [lim]
-type = "Template"
+pattern = 'lim'
+type = 'Template'
 template = '\lim_{$0 \to $1} $2'
 args_count = 2

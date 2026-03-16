@@ -7,6 +7,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, bail, ensure};
+use regex::{Captures, Regex};
 use serde::Deserialize;
 
 #[derive(Clone)]
@@ -20,6 +21,7 @@ pub enum Node {
     /// 特定のコマンド（mat, sumなど）
     Command {
         name: String,
+        captures: Option<Vec<String>>,
         children: Vec<Node>, // 子要素もNodeなので再帰的
         line_num: usize,
     },
@@ -28,9 +30,10 @@ pub enum Node {
     Leaf { content: String, line_num: usize },
 }
 impl Node {
-    fn command(name: String, line_num: usize) -> Node {
+    fn command(name: String, captures: Option<Vec<String>>, line_num: usize) -> Node {
         Node::Command {
             name,
+            captures,
             children: Vec::new(),
             line_num,
         }
@@ -86,6 +89,7 @@ pub enum CommandConfig {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct TemplateConfig {
+    pub pattern: String,
     pub template: String,
     pub args_count: usize,
     pub alias: Option<Vec<String>>,
@@ -99,8 +103,18 @@ pub struct RegexConfig {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct EnvConfig {
+    pub pattern: String,
     pub env_name: String,
+    pub output_prefix: Option<String>,
+    pub output_suffix: Option<String>,
+    pub replacements: Option<Vec<Replacement>>,
     pub alias: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct Replacement {
+    pub from: String,
+    pub to: String,
 }
 
 pub fn parse_to_tree(sample: &str, configs: &HashMap<String, CommandConfig>) -> Result<Node> {
@@ -132,17 +146,60 @@ pub fn parse_to_tree(sample: &str, configs: &HashMap<String, CommandConfig>) -> 
             }
         }
 
-        if configs.contains_key(&trimed.to_string()) {
-            stack.push((Node::command(trimed, i), current_indent));
-        } else {
-            stack.push((
-                Node::Leaf {
-                    content: trimed,
-                    line_num: i,
-                },
-                current_indent,
-            ));
+        // find_map = map + any
+        // コマンドそれぞれに対してチェック＆見つかれば
+        // Some(capture)を返す。それ以外はNone
+        let command_match: Option<Vec<_>> = configs.values().find_map(|c| {
+            let raw_pattern = match c {
+                CommandConfig::Template(t) => &t.pattern,
+                CommandConfig::Env(e) => &e.pattern,
+                CommandConfig::Regex(r) => &r.pattern,
+            };
+            let pattern_str = if raw_pattern.starts_with('^') {
+                raw_pattern.to_string()
+            } else {
+                format!("^{}$", raw_pattern)
+            };
+            let pattern = Regex::new(&pattern_str).expect("invalid regex pattern");
+            pattern
+                .captures(&trimed)?
+                .iter()
+                .skip(1)
+                .map(|m| m.map(|m| m.as_str().to_string()))
+                .collect()
+        });
+
+        dbg!(&command_match);
+
+        match command_match {
+            Some(captures) => {
+                // コマンドにマッチ
+                println!("{}はコマンドです", trimed);
+                stack.push((Node::command(trimed, Some(captures), i), current_indent));
+            }
+            None => {
+                // コマンドではない
+                stack.push((
+                    Node::Leaf {
+                        content: trimed,
+                        line_num: i,
+                    },
+                    current_indent,
+                ));
+            }
         }
+
+        // if configs.contains_key(&trimed.to_string()) {
+        //     stack.push((Node::command(trimed, i), current_indent));
+        // } else {
+        //     stack.push((
+        //         Node::Leaf {
+        //             content: trimed,
+        //             line_num: i,
+        //         },
+        //         current_indent,
+        //     ));
+        // }
     }
 
     fold_stack(&mut stack, 0).with_context(|| "Failed to fold stacks")?;
@@ -237,7 +294,7 @@ impl<'a> CommandLatexConverter<'a> {
             Node::Command { name, children, .. } => match self.configs.get(name) {
                 Some(config) => match config {
                     CommandConfig::Template(t) => self.format_template(name, children, t),
-                    CommandConfig::Env(c) => Ok(self.format_environment(&c.env_name, children)?),
+                    CommandConfig::Env(c) => Ok(self.format_environment(&c, children)?),
                     CommandConfig::Regex(_) => {
                         todo!()
                     }
@@ -247,23 +304,41 @@ impl<'a> CommandLatexConverter<'a> {
             Node::Leaf { content: text, .. } => Ok(text.to_string()),
         }
     }
-    fn format_environment(&self, name: &str, children: &[Node]) -> Result<String> {
+    fn format_environment(&self, config: &EnvConfig, children: &[Node]) -> Result<String> {
         let mut command = String::new();
         command.push('\n');
+        if let Some(s) = &config.output_prefix {
+            command.push_str(s);
+        }
         command.push_str("\\begin{");
-        command.push_str(name);
+        command.push_str(&config.env_name);
         command.push('}');
         command.push('\n');
         let body = children
             .iter()
-            .map(|child| self.compile_command_into_latex(child))
+            .map(|child| match child {
+                Node::Leaf { content, .. } => {
+                    dbg!(&config.replacements);
+                    let converted = match &config.replacements {
+                        Some(replacements) => replacements
+                            .iter()
+                            .fold(content.clone(), |acc, r| acc.replace(&r.from, &r.to)),
+                        None => content.clone(),
+                    };
+                    Ok(converted)
+                }
+                _ => self.compile_command_into_latex(child),
+            })
             .collect::<Result<Vec<_>>>()?
             .join(" \\\\ \n");
         command.push_str(&body);
         command.push('\n');
         command.push_str("\\end{");
-        command.push_str(name);
+        command.push_str(&config.env_name);
         command.push('}');
+        if let Some(s) = &config.output_suffix {
+            command.push_str(s);
+        }
         command.push('\n');
         Ok(command)
     }
