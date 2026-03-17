@@ -11,9 +11,6 @@ fn main() -> anyhow::Result<()> {
         this is a plain text
         # world
         $$
-         frac
-          1
-          2
          mat
           1 2
           3 4
