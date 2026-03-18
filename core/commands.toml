@@ -40,6 +40,12 @@ type = 'Template'
 template = '\lim_{$0 \to $1} $2'
 args_count = 2
 
+# [align]
+# pattern = 'align'
+# type = 'Environment'
+# env_name = 'align'
+# alias = ['\&\&']
+# row_separator = '\\'
 
 # Document
 [h1]
@@ -64,8 +70,13 @@ env_name = "itemize"
 row_separator = '\item '
 
 # Structure
+[inline_math]
+pattern = '\$'
+type = "Environment"
+env_name = "align*"
+
 [display_math]
 pattern = '\$\$'
 type = "Environment"
-env_name = "equation*"
-# row_separator省略 → ""
+env_name = "align*"
+row_separator = '\\'

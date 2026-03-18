@@ -11,9 +11,9 @@ fn main() -> anyhow::Result<()> {
         this is a plain text
         # world
         $$
-         mat
-          1 2
-          3 4
+         f(n) &= (x+1)^2+(y+3)^2
+         &= x^2 + 2x + 1 + y^2 + 6y + 9
+         &= x^2 + y^2 + 2x + 6y + 10
         ",
         &configs,
     )?;
