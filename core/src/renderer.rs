@@ -1,12 +1,25 @@
+use std::collections::HashMap;
+
+use regex::Regex;
+use serde::Deserialize;
+
+use crate::{
+    errors::RenderError,
+    models::{
+        config::{CommandConfig, EnvConfig, RegexConfig, TemplateConfig},
+        node::Node,
+    },
+};
+
 pub struct CommandLatexConverter<'a> {
     pub configs: &'a HashMap<String, CommandConfig>,
 }
 
 impl<'a> CommandLatexConverter<'a> {
-    pub fn compile_command_into_latex(&self, node: &Node) -> Result<String> {
+    pub fn compile_command_into_latex(&self, node: &Node) -> Result<String, RenderError> {
         match node {
             Node::Root { children, .. } => {
-                let parts: Result<Vec<String>> = children
+                let parts: Result<Vec<String>, RenderError> = children
                     .iter()
                     .map(|c| self.compile_command_into_latex(c))
                     .collect();
@@ -24,7 +37,7 @@ impl<'a> CommandLatexConverter<'a> {
                     CommandConfig::Env(c) => self.format_environment(c, children),
                     CommandConfig::Regex(c) => self.format_regex(captures.clone(), c),
                 },
-                None => bail!("{} is unknown command type", name),
+                None => Err(RenderError::UnknownCommand(name.clone())),
             },
             Node::Leaf { content: text, .. } => {
                 let mut text = text.to_string();
@@ -33,7 +46,11 @@ impl<'a> CommandLatexConverter<'a> {
             }
         }
     }
-    fn format_environment(&self, config: &EnvConfig, children: &[Node]) -> Result<String> {
+    fn format_environment(
+        &self,
+        config: &EnvConfig,
+        children: &[Node],
+    ) -> Result<String, RenderError> {
         let mut command = String::new();
         // command.push('\n');
         if let Some(s) = &config.output_prefix {
@@ -56,7 +73,7 @@ impl<'a> CommandLatexConverter<'a> {
                 _ => self.compile_command_into_latex(child),
             })
             .map(|child| Ok(format!("{}{}{}", line_prefix, child?, line_suffix)))
-            .collect::<Result<Vec<_>>>()?
+            .collect::<Result<Vec<_>, RenderError>>()?
             .join(&config.row_separator); //改行削除した
         command.push_str(&body);
         // command.push('\n');
@@ -75,17 +92,17 @@ impl<'a> CommandLatexConverter<'a> {
         name: &str,
         children: &[Node],
         config: &TemplateConfig,
-    ) -> Result<String> {
+    ) -> Result<String, RenderError> {
         let mut template = config.template.clone();
 
         let required = config.args_count;
-        ensure!(
-            children.len() == required,
-            "コマンド '{}' は引数を {} 個必要としますが、{} 個しかありません。",
-            name,
-            required,
-            children.len()
-        );
+        if children.len() != required {
+            return Err(RenderError::MismatchArguments {
+                command: name.to_string(),
+                expected: required,
+                found: children.len(),
+            });
+        }
         for (i, child) in children.iter().enumerate() {
             // $0, $1, $2... を探して置換
             let placeholder = format!("${}", i);
@@ -96,18 +113,22 @@ impl<'a> CommandLatexConverter<'a> {
         Ok(template)
     }
 
-    fn format_regex(&self, captures: Option<Vec<String>>, config: &RegexConfig) -> Result<String> {
+    fn format_regex(
+        &self,
+        captures: Option<Vec<String>>,
+        config: &RegexConfig,
+    ) -> Result<String, RenderError> {
         let mut template = config.template.clone();
         let captures = captures.unwrap_or_default();
         let placeholder = Regex::new(r"\$[0-9]+").unwrap();
         let placeholder_count = placeholder.find_iter(&template).count();
-        ensure!(
-            captures.len() == placeholder_count,
-            "テンプレート '{}' は引数を {} 個必要としますが、有効なキャプチャーグループが{} 個しかありません。",
-            template,
-            placeholder_count,
-            captures.len()
-        );
+        if captures.len() != placeholder_count {
+            return Err(RenderError::MismatchTemplate {
+                template: template.to_string(),
+                expected: placeholder_count,
+                found: captures.len(),
+            });
+        }
         // あえて大きい数字から見ることで$10を$1と誤認することを防ぐ
         for i in (0..captures.len()).rev() {
             // $0, $1, $2... を探して置換
@@ -132,10 +153,11 @@ pub struct ReplacementsConfig {
 }
 
 const DEFAULT_REPLACEMENTS_STR: &str = include_str!("../replacements.toml");
-fn replace_leaf_mut(leaf_str: &mut String) -> Result<()> {
-    let config: ReplacementsConfig = toml::from_str(DEFAULT_REPLACEMENTS_STR)?;
+fn replace_leaf_mut(leaf_str: &mut String) -> Result<(), RenderError> {
+    let config: ReplacementsConfig =
+        toml::from_str(DEFAULT_REPLACEMENTS_STR).map_err(|e| RenderError::Toml(e))?;
     for Replacement { pattern, to } in &config.replacements {
-        let regex_pattern = Regex::new(pattern).with_context(|| "invalid pattern regex")?;
+        let regex_pattern = Regex::new(pattern).map_err(|e| RenderError::Regex { source: e })?;
         *leaf_str = regex_pattern.replace_all(leaf_str, to).to_string();
     }
     Ok(())

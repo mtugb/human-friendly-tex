@@ -1,11 +1,11 @@
-use mytex::load_command_config;
+use mytex::{config::load_command_config, parser::parse_to_tree, renderer::CommandLatexConverter};
 
 fn main() -> anyhow::Result<()> {
     let configs = load_command_config(None)?;
     // dbg!(&configs);
-    let converter = mytex::CommandLatexConverter { configs: &configs };
+    let converter = CommandLatexConverter { configs: &configs };
 
-    let root = mytex::parse_to_tree(
+    let root = parse_to_tree(
         r"
         $
          |mat|

@@ -2,8 +2,10 @@ use std::{cmp::Ordering, collections::HashMap};
 
 use regex::Regex;
 
-use crate::{errors::ParseError, models::{config::CommandConfig, node::Node}};
-
+use crate::{
+    errors::{ParseError, ParseErrorKind},
+    models::{config::CommandConfig, node::Node},
+};
 
 pub fn parse_to_tree(
     sample: &str,
@@ -27,30 +29,18 @@ pub fn parse_to_tree(
         match indent_comparison {
             Ordering::Greater | Ordering::Equal => {}
             Ordering::Less => {
-                fold_stack(&mut stack, current_indent).with_context(|| {
-                    format!(
-                        "Failed to parse block starting at line {}: \"{}\"",
-                        i + 1,
-                        trimed
-                    )
-                })?;
+                fold_stack(&mut stack, current_indent)?;
             }
         }
 
         let mut is_command = false;
 
         for (key, config) in configs {
-            let raw_pattern: &str = match config {
+            let regex_pattern: &Regex = match config {
                 CommandConfig::Template(t) => &t.pattern,
                 CommandConfig::Env(e) => &e.pattern,
                 CommandConfig::Regex(r) => &r.pattern,
             };
-            let sandwiched_pattern: String = if raw_pattern.starts_with('^') {
-                raw_pattern.to_string()
-            } else {
-                format!("^{}$", raw_pattern)
-            };
-            let regex_pattern = Regex::new(&sandwiched_pattern).map_err(|_| )?;
             let captures = regex_pattern.captures(&trimed);
             match captures {
                 Some(c) => {
@@ -74,7 +64,14 @@ pub fn parse_to_tree(
                         None => {
                             // パターンには省略可能なキャプチャグループが少なくとも１つ存在し、
                             // 実際に省略された。
-                            bail!("省略可能なキャプチャグループは使用できません");
+
+                            return Err(ParseError {
+                                line: 404,
+                                col: 100,
+                                kind: ParseErrorKind::DangerousCaptureGroups {
+                                    field_name: key.clone(),
+                                },
+                            });
                         }
                     }
                 }
@@ -96,18 +93,22 @@ pub fn parse_to_tree(
         }
     }
 
-    fold_stack(&mut stack, 0).with_context(|| "Failed to fold stacks")?;
+    fold_stack(&mut stack, 0)?;
 
     let root = stack.first().unwrap();
     Ok(root.clone().0)
 }
 
-fn fold_stack(stack: &mut Vec<(Node, usize)>, into: usize) -> Result<()> {
+fn fold_stack(stack: &mut Vec<(Node, usize)>, into: usize) -> Result<(), ParseError> {
     let mut wait: Vec<(Node, usize)> = Vec::new();
 
     while stack
         .last()
-        .context("fold_stack requires stack with any content")?
+        .ok_or(ParseError {
+            line: 0,
+            col: 0,
+            kind: ParseErrorKind::EmptyStackForFoldStack,
+        })?
         .1
         > into
     {
@@ -131,18 +132,17 @@ fn fold_stack(stack: &mut Vec<(Node, usize)>, into: usize) -> Result<()> {
                     }
                 }
                 Node::Leaf { content, line_num } => {
-                    bail!(
-                        "'{}' (at line {}) is not a command and cannot have children",
-                        content,
-                        *line_num + 1
-                    )
+                    return Err(ParseError {
+                        line: *line_num,
+                        col: 0,
+                        kind: ParseErrorKind::LeafHavingChildren(content.clone()),
+                    });
                 }
             }
         }
     }
     Ok(())
 }
-
 
 fn get_indent(text: &str) -> usize {
     let mut i = 0;

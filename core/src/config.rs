@@ -1,0 +1,58 @@
+use std::{collections::HashMap, fs, path::Path};
+
+use regex::Regex;
+
+use crate::{
+    errors::ConfigError,
+    models::config::{CommandConfig, CommandConfigRaw, EnvConfig, TemplateConfig},
+};
+
+const DEFAULT_CONFIG_STR: &str = include_str!("../commands.toml");
+pub fn load_command_config(
+    path: Option<&Path>,
+) -> Result<HashMap<String, CommandConfig>, ConfigError> {
+    // TODO: 重複時に警告するプロセスを作成
+    let content = match path {
+        Some(p) => fs::read_to_string(p).map_err(|_| {
+            ConfigError::FileNotFount(
+                dunce::canonicalize(p)
+                    .expect("canonicalize error")
+                    .as_os_str()
+                    .to_str()
+                    .unwrap()
+                    .to_string(),
+            )
+        })?,
+        None => DEFAULT_CONFIG_STR.to_string(),
+    };
+    let map: HashMap<String, CommandConfigRaw> =
+        toml::from_str(&content).map_err(|e| ConfigError::Toml(e))?;
+    let validated_map = map
+        .into_iter()
+        .map(|(key, value)| Ok((key.clone(), value.validate(&key)?)))
+        .collect::<Result<HashMap<_, _>, ConfigError>>()?;
+    let mut map_extended: HashMap<String, CommandConfig> = HashMap::new();
+    for (name, config) in validated_map {
+        let aliases: &Vec<Regex> = match &config {
+            CommandConfig::Template(t) => &t.alias,
+            CommandConfig::Env(e) => &e.alias,
+            CommandConfig::Regex(_) => &Vec::new(),
+        };
+        for (i, alias) in aliases.iter().enumerate() {
+            let aliased_config = match &config {
+                CommandConfig::Template(t) => CommandConfig::Template(TemplateConfig {
+                    pattern: alias.clone(),
+                    ..t.clone()
+                }),
+                CommandConfig::Env(e) => CommandConfig::Env(EnvConfig {
+                    pattern: alias.clone(),
+                    ..e.clone()
+                }),
+                CommandConfig::Regex(_) => unreachable!(),
+            };
+            map_extended.insert(name.clone() + "_alias_" + &i.to_string(), aliased_config);
+        }
+        map_extended.insert(name, config);
+    }
+    Ok(map_extended)
+}
