@@ -1,10 +1,10 @@
 # Fdb version 4
-["dvipdf"] 1774948553.72551 "sample.dvi" "sample.pdf" "sample" 1774948553.88537 0
-  "sample.dvi" 1774948553.70272 1536 6873c5801ceb387833f18797ef63ede9 "latex"
+["dvipdf"] 1775034187.87261 "sample.dvi" "sample.pdf" "sample" 1775034188.02728 0
+  "sample.dvi" 1775034187.86426 1612 6e9c89050f400fbd37a410e191317ce1 "latex"
   (generated)
   "sample.pdf"
   (rewritten before read)
-["latex"] 1774948553.47878 "sample.tex" "sample.dvi" "sample" 1774948553.88477 0
+["latex"] 1775034187.74481 "sample.tex" "sample.dvi" "sample" 1775034188.02704 0
   "/etc/texmf/web2c/texmf.cnf" 1774794169.52453 475 c0e671620eb5563b2130f56340a5fde8 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/ptex-fonts/standard/goth10.tfm" 1463434352 1196 5981e79c37b2cfd27b3612a6783cd4b6 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/ptex-fonts/standard/min10.tfm" 1463434352 1196 1be730212205a270378fba11a44765dc ""
@@ -30,8 +30,8 @@
   "/usr/share/texlive/texmf-dist/web2c/texmf.cnf" 1707919699 40399 f2c302f7d2af602abb742093540a5834 ""
   "/usr/share/texmf/web2c/texmf.cnf" 1707919699 40399 f2c302f7d2af602abb742093540a5834 ""
   "/var/lib/texmf/web2c/euptex/platex.fmt" 1774794214 6935560 bb90b2feb9501b651fd2da9c96e832c5 ""
-  "sample.aux" 1774948553.70272 352 c0b1e1ec273ad026269c2c4e44e01414 "latex"
-  "sample.tex" 1774948553.36617 557 7cd17a0607fabb8a32c6653e134812fa ""
+  "sample.aux" 1775034187.86048 352 c0b1e1ec273ad026269c2c4e44e01414 "latex"
+  "sample.tex" 1775034187.66021 597 ce2a4e093b709910fa4943d9762411a9 ""
   (generated)
   "sample.aux"
   "sample.dvi"
