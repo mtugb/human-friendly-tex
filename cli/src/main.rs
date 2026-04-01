@@ -4,7 +4,11 @@ use std::{
 };
 
 use clap::Parser;
-use mytex::{config::load_command_config, parser::parse_to_tree, renderer::CommandLatexConverter};
+use mytex::{
+    config::{load_command_config, load_replacements_config},
+    parser::parse_to_tree,
+    renderer::TreeLatexConverter,
+};
 
 /// Compile human-friendly-tex into latex
 #[derive(Parser, Debug)]
@@ -41,9 +45,10 @@ fn validate_input_file_path(path: &Path) -> anyhow::Result<()> {
 }
 
 fn compile_htex_into_latex(input_str: &str) -> anyhow::Result<String> {
-    let configs = load_command_config(None)?;
-    let converter = CommandLatexConverter { configs: &configs };
-    let root = parse_to_tree(input_str, &configs)?;
+    let command_configs = load_command_config(None)?;
+    let replacements_config = load_replacements_config(None)?;
+    let converter = TreeLatexConverter::new(&command_configs, replacements_config)?;
+    let root = parse_to_tree(input_str, &command_configs)?;
     // {{, }} は{, }のformatでのエスケープ
     let latex = format!(
         r"
@@ -54,7 +59,7 @@ fn compile_htex_into_latex(input_str: &str) -> anyhow::Result<String> {
         {}
         \end{{document}}
     ",
-        converter.compile_command_into_latex(&root)?
+        converter.compile_tree_into_latex(&root)?
     );
     Ok(latex)
 }

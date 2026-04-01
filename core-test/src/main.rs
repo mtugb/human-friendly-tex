@@ -1,9 +1,13 @@
-use mytex::{config::load_command_config, parser::parse_to_tree, renderer::CommandLatexConverter};
+use mytex::{
+    config::{load_command_config, load_replacements_config},
+    parser::parse_to_tree,
+    renderer::TreeLatexConverter,
+};
 
 fn main() -> anyhow::Result<()> {
-    let configs = load_command_config(None)?;
+    let command_configs = load_command_config(None)?;
+    let replacements_config = load_replacements_config(None)?;
     // dbg!(&configs);
-    let converter = CommandLatexConverter { configs: &configs };
 
     let root = parse_to_tree(
         r"
@@ -13,10 +17,12 @@ fn main() -> anyhow::Result<()> {
           c d
          = a*d - b*c
         ",
-        &configs,
+        &command_configs,
     )?;
 
-    let latex = converter.compile_command_into_latex(&root)?;
+    let converter = TreeLatexConverter::new(&command_configs, replacements_config)?;
+
+    let latex = converter.compile_tree_into_latex(&root)?;
 
     println!("{:?}", root);
     println!("{}", latex);

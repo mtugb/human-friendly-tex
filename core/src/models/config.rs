@@ -2,7 +2,7 @@ use regex::Regex;
 use serde::Deserialize;
 
 use crate::errors::ConfigError;
-// RAW_CONFIG
+// RAW_Command_CONFIG
 #[derive(Debug, Deserialize, Clone)]
 #[serde(tag = "type")] // "type" フィールドの値で分岐
 pub enum CommandConfigRaw {
@@ -58,7 +58,7 @@ pub struct EnvConfigRaw {
     pub col_separator: String,
 }
 
-// Validated
+// Command_config_Validated
 #[derive(Debug, Clone)]
 pub enum CommandConfig {
     Template(TemplateConfig),
@@ -145,21 +145,34 @@ impl CommandConfigRaw {
 }
 
 fn compile_regex(raw_alias: &str, field_name: &str) -> Result<Regex, ConfigError> {
-    Ok(
-        Regex::new(&format!("^{}$", raw_alias)).map_err(|e| ConfigError::Regex {
-            field_name: field_name.into(),
-            source: e,
-        })?,
-    )
+    //Ok(Regex::...()?)はOkと?で相殺されるのでけておっけー
+    Regex::new(&format!("^{}$", raw_alias)).map_err(|e| ConfigError::Regex {
+        field_name: field_name.into(),
+        source: e,
+    })
 }
 
 fn compile_regex_all<F: Fn(usize) -> String>(
     raw_alias_vec: Vec<String>,
     with_field_name: F,
 ) -> Result<Vec<Regex>, ConfigError> {
-    Ok(raw_alias_vec
+    raw_alias_vec
         .iter()
         .enumerate() // インデックスを取得
         .map(|(i, raw)| compile_regex(raw, &with_field_name(i)))
-        .collect::<Result<Vec<_>, ConfigError>>()?)
+        .collect::<Result<Vec<_>, ConfigError>>()
+}
+
+// ----------------------------------
+// ReplacementsConfig
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct Replacement {
+    pub pattern: String,
+    pub to: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct ReplacementsConfig {
+    pub replacements: Vec<Replacement>,
 }

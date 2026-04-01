@@ -36,7 +36,9 @@ pub enum ConfigError {
     #[error("Unknown field: {0}")]
     UnknownField(String),
     #[error("Config file \"{0}\" doesn't exist")]
-    FileNotFount(String),
+    CommandConfigFileNotFound(String),
+    #[error("Replacements file \"{0}\" not found")]
+    ReplacementsFileNotFound(String),
     #[error("Invalid value for field \"{field_name}\": {reason}")]
     Value { field_name: String, reason: String },
     #[error("Invalid regex in field \"{field_name}\": {source}")]

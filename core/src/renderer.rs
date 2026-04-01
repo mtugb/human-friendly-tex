@@ -1,27 +1,47 @@
 use std::collections::HashMap;
 
 use regex::Regex;
-use serde::Deserialize;
 
 use crate::{
     errors::RenderError,
     models::{
-        config::{CommandConfig, EnvConfig, RegexConfig, TemplateConfig, WrapConfig},
+        config::{
+            CommandConfig, EnvConfig, RegexConfig, ReplacementsConfig, TemplateConfig, WrapConfig,
+        },
         node::Node,
     },
 };
 
-pub struct CommandLatexConverter<'a> {
+pub struct TreeLatexConverter<'a> {
     pub configs: &'a HashMap<String, CommandConfig>,
+    replacements: Vec<(Regex, String)>,
 }
 
-impl<'a> CommandLatexConverter<'a> {
-    pub fn compile_command_into_latex(&self, node: &Node) -> Result<String, RenderError> {
+impl<'a> TreeLatexConverter<'a> {
+    pub fn new(
+        configs: &'a HashMap<String, CommandConfig>,
+        replacements_config: ReplacementsConfig,
+    ) -> Result<Self, RenderError> {
+        let replacements = replacements_config
+            .replacements
+            .into_iter()
+            .map(|r| {
+                let regex = Regex::new(&r.pattern).map_err(|e| RenderError::Regex { source: e })?;
+                Ok((regex, r.to))
+            })
+            .collect::<Result<Vec<(Regex, String)>, RenderError>>()?;
+        Ok(Self {
+            configs,
+            replacements,
+        })
+    }
+
+    pub fn compile_tree_into_latex(&self, node: &Node) -> Result<String, RenderError> {
         match node {
             Node::Root { children, .. } => {
                 let parts: Result<Vec<String>, RenderError> = children
                     .iter()
-                    .map(|c| self.compile_command_into_latex(c))
+                    .map(|c| self.compile_tree_into_latex(c))
                     .collect();
                 Ok(parts?.join(""))
             }
@@ -42,11 +62,12 @@ impl<'a> CommandLatexConverter<'a> {
             },
             Node::Leaf { content: text, .. } => {
                 let mut text = text.to_string();
-                replace_leaf_mut(&mut text)?;
+                replace_leaf_mut(&mut text, &self.replacements);
                 Ok(text)
             }
         }
     }
+
     fn format_environment(
         &self,
         config: &EnvConfig,
@@ -71,7 +92,7 @@ impl<'a> CommandLatexConverter<'a> {
                     let converted = content.clone().replace(" ", &config.col_separator);
                     Ok(converted)
                 }
-                _ => self.compile_command_into_latex(child),
+                _ => self.compile_tree_into_latex(child),
             })
             .map(|child| Ok(format!("{}{}{}", line_prefix, child?, line_suffix)))
             .collect::<Result<Vec<_>, RenderError>>()?
@@ -91,7 +112,7 @@ impl<'a> CommandLatexConverter<'a> {
     fn format_wrap(&self, config: &WrapConfig, children: &[Node]) -> Result<String, RenderError> {
         let body = children
             .iter()
-            .map(|child| self.compile_command_into_latex(child))
+            .map(|child| self.compile_tree_into_latex(child))
             .collect::<Result<Vec<_>, RenderError>>()?
             .join(&config.row_separator);
         Ok(format!("{}{}{}", config.prefix, body, config.suffix))
@@ -116,7 +137,7 @@ impl<'a> CommandLatexConverter<'a> {
         for (i, child) in children.iter().enumerate() {
             // $0, $1, $2... を探して置換
             let placeholder = format!("${}", i);
-            let replacement = self.compile_command_into_latex(child)?;
+            let replacement = self.compile_tree_into_latex(child)?;
             template = template.replace(&placeholder, &replacement);
         }
 
@@ -151,38 +172,8 @@ impl<'a> CommandLatexConverter<'a> {
     }
 }
 
-#[derive(Debug, Deserialize, Clone)]
-pub struct Replacement {
-    pub pattern: String,
-    pub to: String,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-pub struct ReplacementsConfig {
-    pub replacements: Vec<Replacement>,
-}
-
-const DEFAULT_REPLACEMENTS_STR: &str = include_str!("../replacements.toml");
-fn replace_leaf_mut(leaf_str: &mut String) -> Result<(), RenderError> {
-    let config: ReplacementsConfig =
-        toml::from_str(DEFAULT_REPLACEMENTS_STR).map_err(RenderError::Toml)?;
-    for Replacement { pattern, to } in &config.replacements {
-        let regex_pattern = Regex::new(pattern).map_err(|e| RenderError::Regex { source: e })?;
-        // Leafの最後の文字がアルファベットならスペースをいれる。
-        // "\times" -> "\times "
-        let effective_to = if to
-            .chars()
-            .last()
-            .map(|c| c.is_alphabetic())
-            .unwrap_or(false)
-        {
-            format!("{} ", to)
-        } else {
-            to.clone()
-        };
-        *leaf_str = regex_pattern
-            .replace_all(leaf_str, effective_to.as_str())
-            .to_string();
+fn replace_leaf_mut(leaf_str: &mut String, replacements: &[(Regex, String)]) {
+    for (regex, to) in replacements {
+        *leaf_str = regex.replace_all(leaf_str, to.as_str()).to_string();
     }
-    Ok(())
 }
