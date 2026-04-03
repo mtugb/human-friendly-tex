@@ -76,6 +76,7 @@ pub enum RenderError {
     UnknownCommand(String),
 }
 
+#[derive(Debug)]
 pub struct LintError {
     pub line: usize,
     pub character: usize,

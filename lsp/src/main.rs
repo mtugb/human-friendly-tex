@@ -274,15 +274,39 @@ impl LanguageServer for Backend {
         p: DocumentOnTypeFormattingParams,
     ) -> Result<Option<Vec<TextEdit>>> {
         let Position { line, character } = p.text_document_position.position;
+        self.client
+            .log_message(
+                MessageType::INFO,
+                format!(
+                    "on_type_formatting: line={} character={} ch={:?}",
+                    line, character, p.ch
+                ),
+            )
+            .await;
         let documents = self.open_documents.lock().await;
         let document = documents
             .get(&p.text_document_position.text_document.uri)
             .expect("ドキュメントの一時データへのアクセスに失敗しました");
+        self.client
+            .log_message(
+                MessageType::INFO,
+                format!(
+                    "document lines: {:?}",
+                    document.lines().enumerate().collect::<Vec<_>>()
+                ),
+            )
+            .await;
         let parse_res = parse_to_tree(document, &self.parser_command_config, self.indent_unit);
         match parse_res {
             Ok(root) => {
                 let tree_check_result =
                     check_tree(root, self.indent_unit, &self.parser_command_config);
+                self.client
+                    .log_message(
+                        MessageType::INFO,
+                        format!("check_tree result: {:?}", tree_check_result),
+                    )
+                    .await;
                 match tree_check_result {
                     // 成功=引数十分
                     Ok(()) => Ok(Some(vec![TextEdit {
@@ -290,7 +314,7 @@ impl LanguageServer for Backend {
                             start: Position { line, character: 0 },
                             end: Position {
                                 line,
-                                character: self.indent_unit.unwrap() as u32,
+                                character: self.indent_unit.unwrap_or(4) as u32,
                             },
                         },
                         new_text: "".to_string(),
@@ -298,7 +322,12 @@ impl LanguageServer for Backend {
                     Err(_) => Ok(None),
                 }
             }
-            Err(_) => Ok(None),
+            Err(e) => {
+                self.client
+                    .log_message(MessageType::INFO, format!("parse_to_tree error: {:?}", e))
+                    .await;
+                Ok(None)
+            }
         }
     }
 
