@@ -191,7 +191,7 @@ impl LanguageServer for Backend {
                 Node::Root {
                     children,
                     line_num,
-                    indent,
+                    leading_chars,
                 } => {
                     let mut result = Vec::new();
                     for child in children {
@@ -205,12 +205,12 @@ impl LanguageServer for Backend {
                     captures,
                     children,
                     line_num,
-                    indent,
+                    leading_chars,
                 } => {
                     let mut result = Vec::new();
                     result.push(SemanticToken {
                         delta_line: line_num as u32,
-                        delta_start: indent as u32,
+                        delta_start: leading_chars as u32,
                         length: name.len() as u32,
                         token_type: 0, // SemanticTokenType::KEYWORD
                         token_modifiers_bitset: 0,
@@ -224,11 +224,11 @@ impl LanguageServer for Backend {
                 Node::Leaf {
                     content,
                     line_num,
-                    indent,
+                    leading_chars,
                 } => {
                     vec![SemanticToken {
                         delta_line: line_num as u32,
-                        delta_start: indent as u32,
+                        delta_start: leading_chars as u32,
                         length: content.len() as u32,
                         token_type: 1, //String
                         token_modifiers_bitset: 0,

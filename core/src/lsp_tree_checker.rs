@@ -25,7 +25,7 @@ pub fn check_tree(
             captures: _,
             children,
             line_num,
-            indent,
+            leading_chars,
         } => {
             match configs.get(&config_key) {
                 Some(config) => {
@@ -36,7 +36,7 @@ pub fn check_tree(
                         if expected != found {
                             return Err(LintError {
                                 line: line_num,
-                                character: indent as usize * indent_unit,
+                                character: leading_chars as usize,
                                 kind: crate::errors::LintErrorKind::MismatchArguments {
                                     command: name,
                                     expected,

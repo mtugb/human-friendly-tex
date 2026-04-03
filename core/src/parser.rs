@@ -17,7 +17,7 @@ pub fn parse_to_tree(
         Node::Root {
             children: Vec::new(),
             line_num: 0,
-            indent: -1,
+            leading_chars: -1,
         },
         -1,
     )];
@@ -27,7 +27,7 @@ pub fn parse_to_tree(
         }
         let trimed = line.trim().to_string();
         let last_indent: i32 = stack.last().unwrap().1;
-        let current_indent = get_indent(line) as i32;
+        let current_indent = leading_chars(line) as i32;
         if current_indent % indent_unit as i32 != 0 {
             return Err(ParseError {
                 line: i,
@@ -107,7 +107,7 @@ pub fn parse_to_tree(
                 Node::Leaf {
                     content: trimed,
                     line_num: i,
-                    indent: current_indent,
+                    leading_chars: current_indent,
                 },
                 current_indent,
             ));
@@ -155,11 +155,11 @@ fn fold_stack(stack: &mut Vec<(Node, i32)>, into: i32, indent_unit: usize) -> Re
                 Node::Leaf {
                     content,
                     line_num,
-                    indent,
+                    leading_chars,
                 } => {
                     return Err(ParseError {
                         line: *line_num,
-                        character: *indent as usize * indent_unit,
+                        character: *leading_chars as usize,
                         kind: ParseErrorKind::LeafHavingChildren(content.clone()),
                     });
                 }
@@ -169,7 +169,7 @@ fn fold_stack(stack: &mut Vec<(Node, i32)>, into: i32, indent_unit: usize) -> Re
     Ok(())
 }
 
-fn get_indent(text: &str) -> usize {
+fn leading_chars(text: &str) -> usize {
     let mut i = 0;
     for c in text.chars() {
         if !c.is_ascii_whitespace() {
