@@ -44,6 +44,10 @@ impl LanguageServer for Backend {
                         },
                     ),
                 ),
+                document_on_type_formatting_provider: Some(DocumentOnTypeFormattingOptions {
+                    first_trigger_character: "\n".to_string(),
+                    more_trigger_character: None,
+                }),
                 ..Default::default()
             },
             //のちにenv!("CARGO_PKG_VERSION")
@@ -263,6 +267,39 @@ impl LanguageServer for Backend {
             result_id: None,
             data: genuine_tokens,
         })))
+    }
+
+    async fn on_type_formatting(
+        &self,
+        p: DocumentOnTypeFormattingParams,
+    ) -> Result<Option<Vec<TextEdit>>> {
+        let Position { line, character } = p.text_document_position.position;
+        let documents = self.open_documents.lock().await;
+        let document = documents
+            .get(&p.text_document_position.text_document.uri)
+            .expect("ドキュメントの一時データへのアクセスに失敗しました");
+        let parse_res = parse_to_tree(document, &self.parser_command_config, self.indent_unit);
+        match parse_res {
+            Ok(root) => {
+                let tree_check_result =
+                    check_tree(root, self.indent_unit, &self.parser_command_config);
+                match tree_check_result {
+                    // 成功=引数十分
+                    Ok(()) => Ok(Some(vec![TextEdit {
+                        range: Range {
+                            start: Position { line, character: 0 },
+                            end: Position {
+                                line,
+                                character: self.indent_unit.unwrap() as u32,
+                            },
+                        },
+                        new_text: "".to_string(),
+                    }])),
+                    Err(_) => Ok(None),
+                }
+            }
+            Err(_) => Ok(None),
+        }
     }
 
     async fn shutdown(&self) -> Result<()> {
