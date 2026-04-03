@@ -155,7 +155,7 @@ checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
 name = "cli"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -170,7 +170,7 @@ checksum = "1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570"
 
 [[package]]
 name = "core-test"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "mytex",
@@ -478,7 +478,7 @@ dependencies = [
 
 [[package]]
 name = "lsp"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "mytex",
  "tokio",
@@ -517,7 +517,7 @@ dependencies = [
 
 [[package]]
 name = "mytex"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "dunce",
  "regex",
