@@ -230,13 +230,32 @@ impl LanguageServer for Backend {
                     line_num,
                     leading_chars,
                 } => {
-                    vec![SemanticToken {
-                        delta_line: line_num as u32,
-                        delta_start: leading_chars as u32,
-                        length: content.len() as u32,
-                        token_type: 1, //String
-                        token_modifiers_bitset: 0,
-                    }]
+                    // \command にのみ token_type:1 を付与、それ以外は無色
+                    let mut tokens = Vec::new();
+                    let bytes = content.as_bytes();
+                    let mut i = 0;
+                    while i < bytes.len() {
+                        if bytes[i] == b'\\' {
+                            let start = i;
+                            i += 1;
+                            let cmd_start = i;
+                            while i < bytes.len() && bytes[i].is_ascii_alphabetic() {
+                                i += 1;
+                            }
+                            if i > cmd_start {
+                                tokens.push(SemanticToken {
+                                    delta_line: line_num as u32,
+                                    delta_start: (leading_chars as usize + start) as u32,
+                                    length: (i - start) as u32,
+                                    token_type: 1,
+                                    token_modifiers_bitset: 0,
+                                });
+                            }
+                        } else {
+                            i += 1;
+                        }
+                    }
+                    tokens
                 }
             }
         }
