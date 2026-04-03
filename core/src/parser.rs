@@ -120,7 +120,11 @@ pub fn parse_to_tree(
     Ok(root.clone().0)
 }
 
-fn fold_stack(stack: &mut Vec<(Node, i32)>, into: i32, indent_unit: usize) -> Result<(), ParseError> {
+fn fold_stack(
+    stack: &mut Vec<(Node, i32)>,
+    into: i32,
+    _indent_unit: usize,
+) -> Result<(), ParseError> {
     let mut wait: Vec<(Node, i32)> = Vec::new();
 
     while stack
