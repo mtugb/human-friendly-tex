@@ -1,10 +1,11 @@
 use std::collections::HashMap;
+use std::fmt::format;
 use std::sync::Arc;
 
 use mytex::config::load_command_config;
 use mytex::errors::ParseErrorKind;
 use mytex::lsp_tree_checker::check_tree;
-use mytex::models::config::{CommandConfig, TemplateConfig};
+use mytex::models::config::{CommandConfig, EnvConfig, TemplateConfig, WrapConfig};
 use mytex::parser::parse_to_tree;
 use tokio::sync::Mutex;
 use tower_lsp::jsonrpc::Result;
@@ -90,43 +91,67 @@ impl LanguageServer for Backend {
         //
         //スニペット追加
         for config in self.parser_command_config.values() {
-            if let CommandConfig::Template(TemplateConfig {
-                args_count,
-                completion_label: Some(label),
-                completion_template,
-                ..
-            }) = config
-            {
-                let insert_text = match completion_template {
-                    Some(template) => template.to_string(),
-                    None => {
-                        let snippet = (1..*args_count)
-                            .map(|i| format!("\n    ${}", i))
-                            .collect::<String>();
-                        format!("{}{}", label, snippet)
-                    }
-                };
-                completions.push(CompletionItem {
-                    label: label.to_string(),
-                    kind: Some(CompletionItemKind::SNIPPET),
-                    insert_text: Some(insert_text),
-                    insert_text_format: Some(InsertTextFormat::SNIPPET),
-                    ..Default::default()
-                });
+            match config {
+                CommandConfig::Template(TemplateConfig {
+                    args_count,
+                    completion_label: Some(label), //labelの存在もこのブロックの条件
+                    completion_template,
+                    ..
+                }) => {
+                    let insert_text = match completion_template {
+                        Some(template) => template.to_string(),
+                        None => {
+                            let snippet = (1..*args_count)
+                                .map(|i| format!("\n    ${}", i))
+                                .collect::<String>();
+                            format!("{}{}", label, snippet)
+                        }
+                    };
+                    completions.push(create_completion(label, "command", &insert_text));
+                }
+                CommandConfig::Wrap(WrapConfig {
+                    completion_label: Some(label),
+                    completion_template,
+                    ..
+                }) => {
+                    let insert_text = match completion_template {
+                        Some(template) => template.to_string(),
+                        None => {
+                            format!("{}\n    $1", label)
+                        }
+                    };
+
+                    completions.push(create_completion(label, "wrapper", &insert_text));
+                }
+                CommandConfig::Env(EnvConfig {
+                    completion_label: Some(label),
+                    completion_template: Some(template),
+                    ..
+                }) => {
+                    completions.push(create_completion(label, "env_command", template));
+                }
+                _ => (),
             }
         }
         // useful snips
+        // completions.push(CompletionItem {
+        //     label: "frac".to_string(),
+        //     kind: Some(CompletionItemKind::SNIPPET),
+        //     insert_text: Some("frac\n    $1\n    $2".to_string()),
+        //     insert_text_format: Some(InsertTextFormat::SNIPPET),
+        //     ..Default::default()
+        // });
         completions.push(CompletionItem {
-            label: "frac".to_string(),
+            label: "matrix2".to_string(),
             kind: Some(CompletionItemKind::SNIPPET),
-            insert_text: Some("frac\n    $1\n    $2".to_string()),
+            insert_text: Some("mat\n    $1 $2\n    $3 $4".to_string()),
             insert_text_format: Some(InsertTextFormat::SNIPPET),
             ..Default::default()
         });
         completions.push(CompletionItem {
-            label: "matrix2".to_string(),
+            label: "matrix3".to_string(),
             kind: Some(CompletionItemKind::SNIPPET),
-            insert_text: Some("mat\n    $1  $2\n    $3  $4".to_string()),
+            insert_text: Some("mat\n    $1 $2 $3\n    $4 $5 $6\n    $7 $8 $9".to_string()),
             insert_text_format: Some(InsertTextFormat::SNIPPET),
             ..Default::default()
         });
@@ -211,6 +236,22 @@ impl Backend {
     }
     async fn clear_diagnose(&self, uri: Url) {
         self.client.publish_diagnostics(uri, vec![], None).await;
+    }
+}
+
+fn create_completion(label: &str, display_kind: &str, snip_insert_text: &str) -> CompletionItem {
+    let display_kind_enclosed = format!("({})", display_kind);
+    CompletionItem {
+        label: label.to_string(),
+        detail: Some(display_kind_enclosed.clone()),
+        label_details: Some(CompletionItemLabelDetails {
+            detail: None,
+            description: Some(display_kind_enclosed),
+        }),
+        kind: Some(CompletionItemKind::SNIPPET),
+        insert_text: Some(snip_insert_text.to_string()),
+        insert_text_format: Some(InsertTextFormat::SNIPPET),
+        ..Default::default()
     }
 }
 
