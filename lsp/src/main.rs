@@ -92,8 +92,8 @@ impl LanguageServer for Backend {
         self.diagnose((*text).to_owned(), p.text_document.uri).await;
     }
 
-    async fn completion(&self, p: CompletionParams) -> Result<Option<CompletionResponse>> {
-        let caret_pos = p.text_document_position.position;
+    async fn completion(&self, _p: CompletionParams) -> Result<Option<CompletionResponse>> {
+        // let caret_pos = p.text_document_position.position;
         let mut completions: Vec<CompletionItem> = Vec::new();
         // add commands list
         // completions.extend(
@@ -192,11 +192,7 @@ impl LanguageServer for Backend {
         let root = parse_res.unwrap();
         fn extends_tree(current: Node) -> Vec<SemanticToken> {
             match current {
-                Node::Root {
-                    children,
-                    line_num,
-                    leading_chars,
-                } => {
+                Node::Root { children, .. } => {
                     let mut result = Vec::new();
                     for child in children {
                         result.extend(extends_tree(child));
@@ -205,11 +201,10 @@ impl LanguageServer for Backend {
                 }
                 Node::Command {
                     name,
-                    config_key,
-                    captures,
                     children,
                     line_num,
                     leading_chars,
+                    ..
                 } => {
                     let mut result = Vec::new();
                     result.push(SemanticToken {
