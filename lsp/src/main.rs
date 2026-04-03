@@ -181,8 +181,11 @@ impl LanguageServer for Backend {
         let document = documents
             .get(&p.text_document.uri)
             .expect("ドキュメントの一時データへのアクセスに失敗しました");
-        let root = parse_to_tree(document, &self.parser_command_config, self.indent_unit)
-            .expect("ツリーのパースに失敗");
+        let parse_res = parse_to_tree(document, &self.parser_command_config, self.indent_unit);
+        if parse_res.is_err() {
+            return Ok(None);
+        }
+        let root = parse_res.unwrap();
         fn extends_tree(current: Node) -> Vec<SemanticToken> {
             match current {
                 Node::Root {
@@ -207,7 +210,7 @@ impl LanguageServer for Backend {
                     let mut result = Vec::new();
                     result.push(SemanticToken {
                         delta_line: line_num as u32,
-                        delta_start: indent as u32 * 4,
+                        delta_start: indent as u32,
                         length: name.len() as u32,
                         token_type: 0, // SemanticTokenType::KEYWORD
                         token_modifiers_bitset: 0,
@@ -223,15 +226,13 @@ impl LanguageServer for Backend {
                     line_num,
                     indent,
                 } => {
-                    let mut result = Vec::new();
-                    result.push(SemanticToken {
+                    vec![SemanticToken {
                         delta_line: line_num as u32,
-                        delta_start: indent as u32 * 4,
+                        delta_start: indent as u32,
                         length: content.len() as u32,
-                        token_type: 0, // SemanticTokenType::KEYWORD
+                        token_type: 1, //String
                         token_modifiers_bitset: 0,
-                    });
-                    result
+                    }]
                 }
             }
         }
