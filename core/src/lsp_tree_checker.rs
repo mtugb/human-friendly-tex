@@ -51,11 +51,11 @@ pub fn check_tree(
                 }
                 None => {
                     unreachable!("登録済みのみコマンドに変換されるためここには来ないはず");
-                    return Err(LintError {
-                        line: line_num,
-                        character: indent as usize * indent_unit,
-                        kind: crate::errors::LintErrorKind::UnknownCommand(name),
-                    });
+                    // return Err(LintError {
+                    //     line: line_num,
+                    //     character: indent as usize * indent_unit,
+                    //     kind: crate::errors::LintErrorKind::UnknownCommand(name),
+                    // });
                 }
             };
         }
