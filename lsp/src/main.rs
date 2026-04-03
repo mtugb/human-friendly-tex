@@ -5,6 +5,7 @@ use mytex::config::load_command_config;
 use mytex::errors::ParseErrorKind;
 use mytex::lsp_tree_checker::check_tree;
 use mytex::models::config::{CommandConfig, EnvConfig, TemplateConfig, WrapConfig};
+use mytex::models::node::Node;
 use mytex::parser::parse_to_tree;
 use tokio::sync::Mutex;
 use tower_lsp::jsonrpc::Result;
@@ -28,6 +29,21 @@ impl LanguageServer for Backend {
                     TextDocumentSyncKind::FULL,
                 )),
                 completion_provider: Some(CompletionOptions::default()),
+                semantic_tokens_provider: Some(
+                    SemanticTokensServerCapabilities::SemanticTokensOptions(
+                        SemanticTokensOptions {
+                            legend: SemanticTokensLegend {
+                                token_types: vec![
+                                    SemanticTokenType::KEYWORD,
+                                    SemanticTokenType::STRING,
+                                ],
+                                token_modifiers: vec![],
+                            },
+                            full: Some(SemanticTokensFullOptions::Bool(true)),
+                            ..Default::default()
+                        },
+                    ),
+                ),
                 ..Default::default()
             },
             //のちにenv!("CARGO_PKG_VERSION")
@@ -155,6 +171,70 @@ impl LanguageServer for Backend {
             ..Default::default()
         });
         Ok(Some(CompletionResponse::Array(completions)))
+    }
+
+    async fn semantic_tokens_full(
+        &self,
+        p: SemanticTokensParams,
+    ) -> Result<Option<SemanticTokensResult>> {
+        let documents = self.open_documents.lock().await;
+        let document = documents
+            .get(&p.text_document.uri)
+            .expect("ドキュメントの一時データへのアクセスに失敗しました");
+        let parsed = parse_to_tree(document, &self.parser_command_config, self.indent_unit);
+        fn extends_tree(current: Node) -> Vec<SemanticToken> {
+            match current {
+                Node::Root {
+                    children,
+                    line_num,
+                    indent,
+                } => {
+                    let mut result = Vec::new();
+                    for child in children {
+                        result.extend(extends_tree(child));
+                    }
+                    result
+                }
+                Node::Command {
+                    name,
+                    config_key,
+                    captures,
+                    children,
+                    line_num,
+                    indent,
+                } => {
+                    let mut result = Vec::new();
+                    result.push(SemanticToken {
+                        delta_line: line_num as u32,
+                        delta_start: indent as u32 * 4,
+                        length: name.len() as u32,
+                        token_type: 0, // SemanticTokenType::KEYWORD
+                        token_modifiers_bitset: 0,
+                    });
+
+                    for child in children {
+                        result.extend(extends_tree(child));
+                    }
+                    result
+                }
+                Node::Leaf {
+                    content,
+                    line_num,
+                    indent,
+                } => {
+                    let mut result = Vec::new();
+                    result.push(SemanticToken {
+                        delta_line: line_num as u32,
+                        delta_start: indent as u32 * 4,
+                        length: content.len() as u32,
+                        token_type: 0, // SemanticTokenType::KEYWORD
+                        token_modifiers_bitset: 0,
+                    });
+                    result
+                }
+            }
+        }
+        Ok(None)
     }
 
     async fn shutdown(&self) -> Result<()> {
