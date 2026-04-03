@@ -52,9 +52,15 @@ jobs:
       - name: Build lsp
         run: cargo build --release -p lsp --target ${{ matrix.target }}
 
+      - name: Rename artifacts
+        shell: bash
+        run: |
+          cp target/${{ matrix.target }}/release/cli${{ matrix.ext }} cli-${{ matrix.suffix }}${{ matrix.ext }}
+          cp target/${{ matrix.target }}/release/lsp${{ matrix.ext }} lsp-${{ matrix.suffix }}${{ matrix.ext }}
+
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            target/${{ matrix.target }}/release/cli${{ matrix.ext }}
-            target/${{ matrix.target }}/release/lsp${{ matrix.ext }}
+            cli-${{ matrix.suffix }}${{ matrix.ext }}
+            lsp-${{ matrix.suffix }}${{ matrix.ext }}
