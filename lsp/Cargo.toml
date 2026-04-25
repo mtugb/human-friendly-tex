@@ -1,5 +1,5 @@
 [package]
-name = "lsp"
+name = "dtex-lsp"
 edition = "2024"
 version.workspace = true # workspaceのバージョンを適応
 
